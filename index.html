@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Text Cleaner with Detection</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl">
+        <h1 class="text-2xl font-bold mb-4 text-center">AI Text Cleaner with Detection</h1>
+        <p class="text-gray-600 mb-4 text-center">Paste ChatGPT output to detect and remove invisible Unicode characters and special symbols.</p>
+        
+        <div class="mb-4">
+            <label for="inputText" class="block text-sm font-medium text-gray-700 mb-2">Input Text</label>
+            <textarea id="inputText" class="w-full h-40 p-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Paste your ChatGPT text here..."></textarea>
+        </div>
+
+        <div class="flex justify-center mb-4">
+            <button id="cleanButton" class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">Analyze & Clean Text</button>
+        </div>
+
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Detection Preview</label>
+            <div id="detectionPreview" class="w-full p-3 border rounded-md bg-gray-50 text-sm text-gray-700 overflow-auto max-h-40"></div>
+        </div>
+
+        <div class="mb-4">
+            <label for="outputText" class="block text-sm font-medium text-gray-700 mb-2">Cleansed Output</label>
+            <textarea id="outputText" class="w-full h-40 p-3 border rounded-md bg-gray-50" placeholder="Cleansed text will appear here..." readonly></textarea>
+        </div>
+
+        <div class="flex justify-center">
+            <button id="copyButton" class="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500" disabled>Copy to Clipboard</button>
+        </div>
+    </div>
+
+    <script>
+        const inputText = document.getElementById('inputText');
+        const outputText = document.getElementById('outputText');
+        const detectionPreview = document.getElementById('detectionPreview');
+        const cleanButton = document.getElementById('cleanButton');
+        const copyButton = document.getElementById('copyButton');
+
+        // Map of Unicode characters to their names
+        const unicodeMap = {
+            '\u200B': 'Zero-Width Space (U+200B)',
+            '\u200C': 'Zero-Width Non-Joiner (U+200C)',
+            '\u200D': 'Zero-Width Joiner (U+200D)',
+            '\u202F': 'Narrow No-Break Space (U+202F)',
+            '\uFEFF': 'Zero-Width No-Break Space (U+FEFF)',
+            '“': 'Left Double Quotation Mark (U+201C)',
+            '”': 'Right Double Quotation Mark (U+201D)',
+            '‘': 'Left Single Quotation Mark (U+2018)',
+            '’': 'Right Single Quotation Mark (U+2019)',
+            '—': 'Em Dash (U+2014)',
+            '–': 'En Dash (U+2013)'
+        };
+
+        function detectCharacters(text) {
+            const detected = [];
+            const chars = [...text];
+            chars.forEach(char => {
+                if (unicodeMap[char]) {
+                    detected.push({
+                        char: char,
+                        name: unicodeMap[char],
+                        escaped: char === '\u200B' || char === '\u200C' || char === '\u200D' || char === '\uFEFF' || char === '\u202F' ? '[ ]' : char
+                    });
+                }
+            });
+            return detected;
+        }
+
+        function renderDetectionPreview(detected) {
+            if (detected.length === 0) {
+                detectionPreview.innerHTML = '<p class="text-gray-500">No special characters detected.</p>';
+                return;
+            }
+            detectionPreview.innerHTML = `
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="border-b">
+                            <th class="py-1">Character</th>
+                            <th class="py-1">Name</th>
+                            <th class="py-1">Code Point</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${detected.map(item => `
+                            <tr class="border-b">
+                                <td class="py-1">${item.escaped}</td>
+                                <td class="py-1">${item.name}</td>
+                                <td class="py-1">${item.name.match(/U\+[0-9A-F]{4}/)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function cleanText(text) {
+            // Remove invisible Unicode characters
+            text = text.replace(/[\u200B-\u200D\u202F\uFEFF]/g, '');
+            // Replace smart quotes with straight quotes
+            text = text.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+            // Replace em-dashes and en-dashes with hyphen
+            text = text.replace(/[—–]/g, '-');
+            // Normalize multiple spaces to single space
+            text = text.replace(/\s+/g, ' ').trim();
+            return text;
+        }
+
+        cleanButton.addEventListener('click', () => {
+            const input = inputText.value;
+            if (!input) {
+                alert('Please paste some text to analyze.');
+                return;
+            }
+            // Detect special characters
+            const detected = detectCharacters(input);
+            renderDetectionPreview(detected);
+            // Clean the text
+            const cleaned = cleanText(input);
+            outputText.value = cleaned;
+            copyButton.disabled = false;
+        });
+
+        copyButton.addEventListener('click', () => {
+            outputText.select();
+            try {
+                document.execCommand('copy');
+                alert('Text copied to clipboard!');
+            } catch (err) {
+                alert('Failed to copy text. Please copy manually.');
+            }
+        });
+
+        // Enable copy button only when output is present
+        outputText.addEventListener('input', () => {
+            copyButton.disabled = outputText.value === '';
+        });
+    </script>
+</body>
+</html>

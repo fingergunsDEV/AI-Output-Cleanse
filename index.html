@@ -1,197 +1,172 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Text Cleaner with Detection</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>AI Text Cleaner with Detection</title>
+	<script src="https://cdn.tailwindcss.com"></script>
+	<style>
+		/* Optional: Add a subtle style for the detection preview table */
+		#detectionPreview table th {
+			font-weight: 600;
+			/* Make headers a bit bolder */
+			background-color: #e5e7eb;
+			/* Light gray background for header */
+		}
+
+		#detectionPreview table tr:nth-child(even) {
+			background-color: #f3f4f6;
+			/* Zebra striping for rows */
+		}
+	</style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen">
-    <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-3xl">
-        <h1 class="text-3xl font-bold mb-4 text-center text-gray-800">AI Text Cleaner</h1>
-        <p class="text-gray-600 mb-6 text-center">Paste AI-generated text to detect and remove invisible Unicode characters and special symbols.</p>
-        
-        <!-- Input Section -->
-        <div class="mb-6">
-            <label for="inputText" class="block text-sm font-medium text-gray-700 mb-2">Input Text</label>
-            <textarea id="inputText" class="w-full h-48 p-4 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y" placeholder="Paste your AI-generated text here..."></textarea>
-            <p id="inputCharCount" class="text-sm text-gray-500 mt-1">Characters: 0</p>
-        </div>
 
-        <!-- Action Buttons -->
-        <div class="flex justify-center mb-6 space-x-4">
-            <button id="cleanButton" class="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">Analyze & Clean</button>
-            <button id="exportButton" class="bg-purple-500 text-white px-6 py-2 rounded-md hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" disabled>Export Detection (CSV)</button>
-        </div>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+	<div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-3xl">
+		<h1 class="text-3xl font-bold mb-4 text-center text-gray-800">AI Text Cleaner</h1>
+		<p class="text-gray-600 mb-6 text-center">Paste AI-generated text to detect and remove invisible Unicode characters and special symbols, and see their positions.</p>
+		<div class="mb-6">
+			<label for="inputText" class="block text-sm font-medium text-gray-700 mb-2">Input Text</label>
+			<textarea id="inputText" class="w-full h-48 p-4 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y" placeholder="Paste your AI-generated text here..."></textarea>
+			<p id="inputCharCount" class="text-sm text-gray-500 mt-1">Characters: 0</p>
+		</div>
+		<div class="flex justify-center mb-6 space-x-4">
+			<button id="cleanButton" class="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">Analyze & Clean</button>
+			<button id="exportButton" class="bg-purple-500 text-white px-6 py-2 rounded-md hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" disabled>Export Detection (CSV)</button>
+		</div>
+		<div class="mb-6">
+			<label class="block text-sm font-medium text-gray-700 mb-2">Detected Characters and Positions</label>
+			<div id="detectionPreview" class="w-full p-4 border rounded-md bg-gray-50 text-sm text-gray-700 overflow-auto max-h-40">
+				<p class="text-gray-500">Click "Analyze & Clean" to see detected characters and their positions.</p>
+			</div>
+		</div>
+		<div class="mb-6">
+			<label for="outputText" class="block text-sm font-medium text-gray-700 mb-2">Cleansed Output</label>
+			<textarea id="outputText" class="w-full h-48 p-4 border rounded-md bg-gray-50 resize-y" placeholder="Cleansed text will appear here..." readonly></textarea>
+			<p id="outputCharCount" class="text-sm text-gray-500 mt-1">Characters: 0</p>
+		</div>
+		<div class="flex justify-center">
+			<button id="copyButton" class="bg-green-500 text-white px-6 py-2 rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 transition" disabled>Copy to Clipboard</button>
+		</div>
+		<div id="toast" class="fixed bottom-4 right-4 bg-gray-800 text-white px-4 py-2 rounded-md hidden z-50">Action completed!</div>
+	</div>
 
-        <!-- Detection Preview -->
-        <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Detected Characters</label>
-            <div id="detectionPreview" class="w-full p-4 border rounded-md bg-gray-50 text-sm text-gray-700 overflow-auto max-h-40"></div>
-        </div>
+	<script>
+		const inputText = document.getElementById('inputText');
+		const outputText = document.getElementById('outputText');
+		const detectionPreview = document.getElementById('detectionPreview');
+		const cleanButton = document.getElementById('cleanButton');
+		const copyButton = document.getElementById('copyButton');
+		const exportButton = document.getElementById('exportButton');
+		const inputCharCount = document.getElementById('inputCharCount');
+		const outputCharCount = document.getElementById('outputCharCount');
+		const toast = document.getElementById('toast');
+		const unicodeMap = {
+			'\u00A0': 'No-Break Space (U+00A0)',
+			'\u200B': 'Zero-Width Space (U+200B)',
+			'\u200C': 'Zero-Width Non-Joiner (U+200C)',
+			'\u200D': 'Zero-Width Joiner (U+200D)',
+			'\u2028': 'Line Separator (U+2028)',
+			'\u2029': 'Paragraph Separator (U+2029)',
+			'\u202F': 'Narrow No-Break Space (U+202F)',
+			'\uFEFF': 'Zero-Width No-Break Space / BOM (U+FEFF)',
+			'\u00AD': 'Soft Hyphen (U+00AD)',
+			'': 'Left Double Quotation Mark (U+201C)',
+			'': 'Right Double Quotation Mark (U+201D)',
+			'': 'Left Single Quotation Mark (U+2018)',
+			'': 'Right Single Quotation Mark (U+2019)',
+			'': 'Em Dash (U+2014)',
+			'': 'En Dash (U+2013)'
+		};
+		let detected = [];
 
-        <!-- Output Section -->
-        <div class="mb-6">
-            <label for="outputText" class="block text-sm font-medium text-gray-700 mb-2">Cleansed Output</label>
-            <textarea id="outputText" class="w-full h-48 p-4 border rounded-md bg-gray-50 resize-y" placeholder="Cleansed text will appear here..." readonly></textarea>
-            <p id="outputCharCount" class="text-sm text-gray-500 mt-1">Characters: 0</p>
-        </div>
+		function showToast(message) {
+			toast.textContent = message;
+			toast.classList.remove('hidden');
+			setTimeout(() => toast.classList.add('hidden'), 3000);
+		}
 
-        <!-- Copy Button -->
-        <div class="flex justify-center">
-            <button id="copyButton" class="bg-green-500 text-white px-6 py-2 rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 transition" disabled>Copy to Clipboard</button>
-        </div>
+		function updateCharCounts() {
+			inputCharCount.textContent = `Characters: ${inputText.value.length}`;
+			outputCharCount.textContent = `Characters: ${outputText.value.length}`;
+		}
 
-        <!-- Toast Notification -->
-        <div id="toast" class="fixed bottom-4 right-4 bg-gray-800 text-white px-4 py-2 rounded-md hidden">Action completed!</div>
-    </div>
+		function detectAndCleanText(text) {
+			detected = [];
+			let clean = '';
+			for (let i = 0; i < text.length; i++) {
+				const char = text[i];
+				if (unicodeMap[char]) {
+					detected.push({
+						char,
+						name: unicodeMap[char],
+						position: i
+					});
+				} else {
+					clean += char;
+				}
+			}
+			return clean;
+		}
 
-    <script>
-        const inputText = document.getElementById('inputText');
-        const outputText = document.getElementById('outputText');
-        const detectionPreview = document.getElementById('detectionPreview');
-        const cleanButton = document.getElementById('cleanButton');
-        const copyButton = document.getElementById('copyButton');
-        const exportButton = document.getElementById('exportButton');
-        const inputCharCount = document.getElementById('inputCharCount');
-        const outputCharCount = document.getElementById('outputCharCount');
-        const toast = document.getElementById('toast');
+		function renderDetectionTable() {
+			if (detected.length === 0) {
+				detectionPreview.innerHTML = '<p class="text-gray-500">No special characters detected.</p>';
+				return;
+			}
+			let table = '<table class="min-w-full text-sm table-auto"><thead><tr><th class="px-2 py-1 text-left">Character</th><th class="px-2 py-1 text-left">Unicode Name</th><th class="px-2 py-1 text-left">Position</th></tr></thead><tbody>';
+			for (const {
+					char,
+					name,
+					position
+				} of detected) {
+				table += `<tr><td class="px-2 py-1">${char === ' ' ? '[space]' : char}</td><td class="px-2 py-1">${name}</td><td class="px-2 py-1">${position}</td></tr>`;
+			}
+			table += '</tbody></table>';
+			detectionPreview.innerHTML = table;
+		}
 
-        // Map of Unicode characters to their names
-        const unicodeMap = {
-            '\u200B': 'Zero-Width Space (U+200B)',
-            '\u200C': 'Zero-Width Non-Joiner (U+200C)',
-            '\u200D': 'Zero-Width Joiner (U+200D)',
-            '\u202F': 'Narrow No-Break Space (U+202F)',
-            '\uFEFF': 'Zero-Width No-Break Space (U+FEFF)',
-            '“': 'Left Double Quotation Mark (U+201C)',
-            '”': 'Right Double Quotation Mark (U+201D)',
-            '‘': 'Left Single Quotation Mark (U+2018)',
-            '’': 'Right Single Quotation Mark (U+2019)',
-            '—': 'Em Dash (U+2014)',
-            '–': 'En Dash (U+2013)'
-        };
+		function exportToCSV() {
+			if (detected.length === 0) return;
+			let csv = 'Character,Unicode Name,Position\n';
+			detected.forEach(({
+				char,
+				name,
+				position
+			}) => {
+				const displayChar = char === ' ' ? '[space]' : char;
+				csv += `"${displayChar}","${name}",${position}\n`;
+			});
+			const blob = new Blob([csv], {
+				type: 'text/csv;charset=utf-8;'
+			});
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.setAttribute('href', url);
+			link.setAttribute('download', 'unicode_detection.csv');
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+		}
+		cleanButton.addEventListener('click', () => {
+			const rawText = inputText.value;
+			const cleaned = detectAndCleanText(rawText);
+			outputText.value = cleaned;
+			updateCharCounts();
+			renderDetectionTable();
+			copyButton.disabled = cleaned.length === 0;
+			exportButton.disabled = detected.length === 0;
+		});
+		copyButton.addEventListener('click', () => {
+			outputText.select();
+			document.execCommand('copy');
+			showToast('Copied to clipboard!');
+		});
+		exportButton.addEventListener('click', exportToCSV);
+		inputText.addEventListener('input', updateCharCounts);
+	</script>
 
-        function showToast(message) {
-            toast.textContent = message;
-            toast.classList.remove('hidden');
-            setTimeout(() => toast.classList.add('hidden'), 2000);
-        }
-
-        function updateCharCounts() {
-            inputCharCount.textContent = `Characters: ${inputText.value.length}`;
-            outputCharCount.textContent = `Characters: ${outputText.value.length}`;
-        }
-
-        function detectCharacters(text) {
-            const detected = [];
-            const chars = [...text];
-            chars.forEach(char => {
-                if (unicodeMap[char]) {
-                    detected.push({
-                        char: char,
-                        name: unicodeMap[char],
-                        escaped: char === '\u200B' || char === '\u200C' || char === '\u200D' || char === '\uFEFF' || char === '\u202F' ? '[ ]' : char
-                    });
-                }
-            });
-            return detected;
-        }
-
-        function renderDetectionPreview(detected) {
-            if (detected.length === 0) {
-                detectionPreview.innerHTML = '<p class="text-gray-500">No special characters detected.</p>';
-                exportButton.disabled = true;
-                return;
-            }
-            detectionPreview.innerHTML = `
-                <table class="w-full text-left">
-                    <thead>
-                        <tr class="border-b">
-                            <th class="py-1">Character</th>
-                            <th class="py-1">Name</th>
-                            <th class="py-1">Code Point</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${detected.map(item => `
-                            <tr class="border-b">
-                                <td class="py-1">${item.escaped}</td>
-                                <td class="py-1">${item.name}</td>
-                                <td class="py-1">${item.name.match(/U\+[0-9A-F]{4}/)}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            `;
-            exportButton.disabled = false;
-        }
-
-        function cleanText(text) {
-            text = text.replace(/[\u200B-\u200D\u202F\uFEFF]/g, '');
-            text = text.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
-            text = text.replace(/[—–]/g, '-');
-            text = text.replace(/\s+/g, ' ').trim();
-            return text;
-        }
-
-        function exportToCSV(detected) {
-            const headers = ['Character', 'Name', 'Code Point'];
-            const rows = detected.map(item => [
-                item.escaped === '[ ]' ? 'Invisible' : item.escaped,
-                item.name,
-                item.name.match(/U\+[0-9A-F]{4}/)[0]
-            ]);
-            const csvContent = [
-                headers.join(','),
-                ...rows.map(row => row.join(','))
-            ].join('\n');
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'detected_characters.csv';
-            link.click();
-            URL.revokeObjectURL(link.href);
-        }
-
-        cleanButton.addEventListener('click', () => {
-            const input = inputText.value;
-            if (!input) {
-                showToast('Please paste some text to analyze.');
-                return;
-            }
-            const detected = detectCharacters(input);
-            renderDetectionPreview(detected);
-            const cleaned = cleanText(input);
-            outputText.value = cleaned;
-            copyButton.disabled = false;
-            updateCharCounts();
-            showToast('Text analyzed and cleaned!');
-        });
-
-        copyButton.addEventListener('click', () => {
-            outputText.select();
-            try {
-                document.execCommand('copy');
-                showToast('Text copied to clipboard!');
-            } catch (err) {
-                showToast('Failed to copy text. Please copy manually.');
-            }
-        });
-
-        exportButton.addEventListener('click', () => {
-            const detected = detectCharacters(inputText.value);
-            if (detected.length > 0) {
-                exportToCSV(detected);
-                showToast('Detection exported as CSV!');
-            }
-        });
-
-        inputText.addEventListener('input', updateCharCounts);
-        outputText.addEventListener('input', updateCharCounts);
-
-        // Initial char count
-        updateCharCounts();
-    </script>
 </body>
+
 </html>
